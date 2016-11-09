@@ -12,10 +12,6 @@ import requests,datetime
 
 # Create your views here.
 
-@login_required
-def index(request):
-    return render(request,"index.html")
-
 def about(query,qtype=None):
     service_url = 'https://kgsearch.googleapis.com/v1/entities:search'
     params = {
@@ -36,8 +32,8 @@ def about(query,qtype=None):
             return response['itemListElement'][0]['result']['name'] +" is a " +\
                    response['itemListElement'][0]['result']["description"]
     for element in response['itemListElement']:
-      try:result += element['result']['name'] + "->" +element['result']["description"]+"\n"
-      except:pass
+        try:result += element['result']['name'] + "->" +element['result']["description"]+"\n"
+        except:pass
     return result
 
 def getType(l):
@@ -232,7 +228,8 @@ except (OperationalError,ProgrammingError):#No DB exist
               reflections,
               call=call)
 
-    
+
+
 def initiateChat(senderID):
     message = 'Welcome to NLTK-Chat demo.'
     chat._startNewSession(senderID)
@@ -266,4 +263,24 @@ def webhook(request):
     return JsonResponse({"status": "Error","message":"Invalid request method"})
 
 
+@login_required
+def index(request):
+    return render(request,"index.html")
+
+
+def user_login(request):
+    logout(request)
+    if request.method=="POST":
+        username = request.POST.get('username','')
+        password = request.POST.get('password','')
+        user = authenticate(username=username, password=password)
+        if user is not None and user.is_active:
+            login(request, user)
+            return redirect(request.POST.get('next',"/"))
+    return render(request,'login.html', context={"next":request.GET.get('next',"")})
+
+
+def user_logout(request):
+    logout(request)
+    return redirect('login')
 
