@@ -1,6 +1,8 @@
 from django.shortcuts import render
 from django.http import JsonResponse,HttpResponse
 from django.views.decorators.csrf import csrf_exempt
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth import authenticate, login, logout
 import json,wikipedia,urllib,os
 from chatbot import Chat,reflections,multiFunctionCall
 from .models import *
@@ -10,10 +12,7 @@ import requests,datetime
 
 # Create your views here.
 
-
-app_client_id = `<Microsoft App ID>`
-app_client_secret = `<Microsoft App Secret>`
-
+@login_required
 def index(request):
     return render(request,"index.html")
 
@@ -233,87 +232,38 @@ except (OperationalError,ProgrammingError):#No DB exist
               reflections,
               call=call)
 
-
-def respond(serviceUrl,channelId,replyToId,fromData,
-            recipientData,message,messageType,conversation):
-    url="https://login.microsoftonline.com/common/oauth2/v2.0/token"
-    data = {"grant_type":"client_credentials",
-            "client_id":app_client_id,
-            "client_secret":app_client_secret,
-            "scope":"https://graph.microsoft.com/.default"
-           }
-    response = requests.post(url,data)
-    resData = response.json()
-    responseURL = serviceUrl + "v3/conversations/%s/activities/%s" % (conversation["id"],replyToId)
-    chatresponse = requests.post(
-                        responseURL,
-                        json={
-                            "type": messageType,
-                            "timestamp": datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f%zZ"),
-                            "from": fromData,
-                            "conversation": conversation,
-                            "recipient": recipientData,
-                            "text": message,
-                            "replyToId": replyToId
-                        },
-                        headers={
-                            "Authorization":"%s %s" % (resData["token_type"],resData["access_token"])
-                        }
-                   )
-@background(schedule=1)
-def initiateChat(data):
-    membersAdded=data["membersAdded"]
-    fromID = data["from"]["id"]
-    conversationID = data["id"]
+    
+def initiateChat(senderID):
     message = 'Welcome to NLTK-Chat demo.'
-    senderID = data["conversation"]["id"]
     chat._startNewSession(senderID)
     chat.conversation[senderID].append(message)
-    respond(data["serviceUrl"],
-            data["channelId"],
-            conversationID,
-            data["recipient"],
-            {"id":senderID},
-            message,
-            "message",
-            data["conversation"])
+    return message
 
-@background(schedule=1)
-def respondToClient(data):
-    conversationID = data["id"]
+def respondToClient(senderID,data):
     message = data["text"]
-    senderID = data["conversation"]["id"]
     chat.attr[senderID]={"match":None,"pmatch":None}
     chat.conversation[senderID].append(message)
     message = message.rstrip(".! \n\t")
     result = chat.respond(message,sessionID=senderID)
     chat.conversation[senderID].append(result)
-    respond(
-            data["serviceUrl"],
-            data["channelId"],
-            conversationID,
-            data["recipient"],
-            data["from"],
-            result,
-            "message",
-            data["conversation"]
-        )
     del chat.attr[senderID]
+    return result
 
 def chathandler(request):
     data = json.loads(request.body)
     # Send text message
     if data["type"]=="conversationUpdate":
-        initiateChat(data)
+        return {"status": "","message":return initiateChat(request.user.username)}
     if data["type"]=="message":
-        respondToClient(data)
-    return HttpResponse("It's working")
+        return {"status": "","message":respondToClient(request.user.username,data)}
+    return {"status": "Error","message":"Unknown type:'%s'"% data['type']}
 
 @csrf_exempt
+@login_required
 def webhook(request):
     if request.method=="POST":
-        return chathandler(request)
-    return HttpResponse("Invalid request method")
+        return JsonResponse(chathandler(request))
+    return JsonResponse({"status": "Error","message":"Invalid request method"})
 
 
 
