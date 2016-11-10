@@ -16,4 +16,4 @@ In the shell prompt or Terminal, run
   python manage.py migrate
   python manage.py runserver
   ```
-Open http://localhost:8000 in your browser
+Open [http://localhost:8000](http://localhost:8000) in your browser
